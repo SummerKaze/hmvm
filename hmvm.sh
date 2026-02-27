@@ -194,7 +194,15 @@ hmvm_version() {
 }
 
 # 获取当前激活的版本
+# 优先读取 hmvm use 写入的 $HMVM_CURRENT 环境变量，
+# 回退到 PATH 中 ohpm 路径推断（兼容未通过 hmvm use 激活的情况）
 hmvm_ls_current() {
+  # 快速路径：hmvm use 已设置环境变量，直接返回
+  if [ -n "${HMVM_CURRENT-}" ]; then
+    hmvm_echo "${HMVM_CURRENT}"
+    return 0
+  fi
+  # 回退：通过 PATH 中 ohpm 路径推断（可能受 CHASE_LINKS 影响，仅作兜底）
   local OHPM_PATH
   OHPM_PATH="$(command which ohpm 2>/dev/null)" || true
   if [ -z "${OHPM_PATH}" ]; then
@@ -426,6 +434,9 @@ hmvm_use() {
   export DEVECO_NODE_HOME="${VERSION_PATH}/tool/node"
   export DEVECO_SDK_HOME="${VERSION_PATH}/sdk"
   export HMVM_BIN="${VERSION_PATH}/bin"
+  # 记录当前激活版本，供 hmvm current / hmvm list 直接读取，
+  # 避免依赖 which ohpm 路径推断（CHASE_LINKS 等选项会跟随软链接导致误判）
+  export HMVM_CURRENT="${VERSION}"
 
   \hash -r 2>/dev/null || true
 
