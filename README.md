@@ -78,8 +78,8 @@ Directory Size: 6.1G
 └─────────────┴────────────┴───────┴────────┴────────┴─────┴────────┴───────┘
 ```
 
-- **Global `●`**：当前 shell 激活的全局版本（`hmvm use` 设置）
-- **Local `●`**：当前目录 `.hmvmrc` 指定的版本
+- **Global `●`**：`hmvm global` 设置的全局默认版本（新建终端自动激活）
+- **Local `●`**：当前 shell 中 `hmvm use` 激活的版本
 
 ### 切换版本
 
@@ -105,13 +105,20 @@ $ hvigorw --version
 6.23.2
 ```
 
-### 设置默认版本（新建 shell 自动激活）
+### 设置全局默认版本（新建 shell 自动激活）
 
-```bash
-hmvm alias default 6.1.0
+```
+$ hmvm global 6.1.0
+default -> v6.1.0
+Now using HarmonyOS command-line-tools v6.1.0
 ```
 
-在 shell profile 中 source hmvm.sh 后，每次新建终端自动激活 `default` 别名对应的版本。
+设置后每次新建终端会静默激活该版本，无需手动 `hmvm use`。查看当前 global 版本：
+
+```
+$ hmvm global
+v6.1.0
+```
 
 ### 项目内使用 .hmvmrc
 
@@ -144,7 +151,8 @@ hmvm uninstall 6.0.2
 | `hmvm -V` / `hmvm --version` | 显示 hmvm 版本号 |
 | `hmvm install <version> --from <path>` | 从本地路径复制安装 |
 | `hmvm install <version> --from <path> --link` | 从本地路径符号链接安装（零拷贝） |
-| `hmvm use [<version>] [--save]` | 切换版本（无参数读取 .hmvmrc） |
+| `hmvm global [<version>]` | 设置或查看全局默认版本（新建 shell 自动激活） |
+| `hmvm use [<version>] [--save]` | 切换版本（当前 shell 生效，无参数读取 .hmvmrc） |
 | `hmvm list` / `hmvm ls` | 列出已安装版本（表格形式） |
 | `hmvm current` | 显示当前激活版本 |
 | `hmvm uninstall <version>` | 卸载版本 |
@@ -196,8 +204,7 @@ export DEVECO_NODE_HOME=~/command-line-tools/tool/node
 ```bash
 # 用 --link 导入，无需复制文件
 hmvm install 6.1.0 --from ~/command-line-tools --link
-hmvm use 6.1.0
-hmvm alias default 6.1.0   # 新建 shell 自动激活
+hmvm global 6.1.0   # 设置全局默认版本，新建 shell 自动激活
 ```
 
 ## 技术说明

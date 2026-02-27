@@ -7,7 +7,7 @@
 { # this ensures the entire script is downloaded #
 
 HMVM_SCRIPT_SOURCE="$_"
-HMVM_VERSION="1.0"
+HMVM_VERSION="1.2"
 
 # =============================================================================
 # 工具函数（移植自 nvm）
@@ -331,7 +331,7 @@ hmvm_parse_version_field() {
 # 列出已安装版本（fvm 风格表格）
 # 列: Version | codelinter | ohpm | hstack | hvigor | API | Global | Local
 hmvm_ls() {
-  local VERSION_DIR VERSIONS CURRENT LOCAL_VERSION HMVMRC DIR_SIZE
+  local VERSION_DIR VERSIONS CURRENT GLOBAL_VERSION DIR_SIZE
   local HDR_SEP MID_SEP BOT_SEP
   local VER ver_str vpath FIRST
   local codelinter_ver ohpm_ver hstack_ver hvigor_ver api_ver global_mark local_mark
@@ -346,11 +346,14 @@ hmvm_ls() {
     return 0
   fi
 
+  # Global: 读取 default 别名文件（持久值，不随 hmvm use 变化）
+  GLOBAL_VERSION=""
+  local _default_ver
+  _default_ver="$(hmvm_resolve_alias "default" 2>/dev/null)" || true
+  [ -n "${_default_ver}" ] && GLOBAL_VERSION="$(hmvm_ensure_version_prefix "${_default_ver}")"
+
+  # Local: 当前 shell 激活的版本（随 hmvm use 变化）
   CURRENT="$(hmvm_ls_current)"
-  LOCAL_VERSION=""
-  if HMVMRC="$(hmvm_find_hmvmrc 2>/dev/null)"; then
-    LOCAL_VERSION="$(hmvm_ensure_version_prefix "$(command cat "${HMVMRC}" 2>/dev/null)")"
-  fi
 
   DIR_SIZE=""
   if hmvm_has du; then
@@ -391,11 +394,12 @@ hmvm_ls() {
     api_ver="$(hmvm_parse_version_field "${vpath}" "apiVersion")"
 
     global_mark=""
-    if [ "${CURRENT}" = "${VER}" ] || [ "${CURRENT}" = "${ver_str}" ]; then
+    if [ -n "${GLOBAL_VERSION}" ] && \
+       ([ "${GLOBAL_VERSION}" = "${VER}" ] || [ "${GLOBAL_VERSION}" = "${ver_str}" ]); then
       global_mark="●"
     fi
     local_mark=""
-    if [ "${LOCAL_VERSION}" = "${VER}" ] || [ "${LOCAL_VERSION}" = "${ver_str}" ]; then
+    if [ "${CURRENT}" = "${VER}" ] || [ "${CURRENT}" = "${ver_str}" ]; then
       local_mark="●"
     fi
 
@@ -707,6 +711,7 @@ hmvm_print_help() {
   hmvm_echo ""
   hmvm_echo "Usage:"
   hmvm_echo "  hmvm install <version> --from <path> [--link]  Install from local path"
+  hmvm_echo "  hmvm global [<version>]               Set/show global default version"
   hmvm_echo "  hmvm use [<version>] [--save]         Switch to version (or read .hmvmrc)"
   hmvm_echo "  hmvm ls [list]                        List installed versions"
   hmvm_echo "  hmvm ls-remote                        List available versions"
@@ -827,6 +832,25 @@ hmvm() {
     alias)
       hmvm_alias "$1" "$2"
       ;;
+    global)
+      if [ $# -lt 1 ]; then
+        # 无参数：显示当前 global 版本
+        local GLOBAL
+        GLOBAL="$(hmvm_resolve_alias "default" 2>/dev/null)" || true
+        if [ -n "${GLOBAL}" ]; then
+          hmvm_echo "${GLOBAL}"
+        else
+          hmvm_echo "No global version set. Use 'hmvm global <version>' to set one."
+        fi
+        return 0
+      fi
+      # 有参数：设置 default 别名并立即激活
+      if hmvm_alias "default" "$1"; then
+        hmvm_use "$1"
+        return $?
+      fi
+      return 1
+      ;;
     which)
       hmvm_which "$1"
       ;;
@@ -846,5 +870,8 @@ hmvm_use_default_if_present() {
     hmvm_use "${DEFAULT}" 2>/dev/null || true
   fi
 }
+
+# source 时自动激活 global 版本（新建终端生效）
+hmvm_use_default_if_present
 
 } # this ensures the entire script is downloaded #
