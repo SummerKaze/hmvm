@@ -158,7 +158,9 @@ $HMVM_DIR/                        # 默认 ~/.hmvm
 | `HMVM_DIR` | hmvm 安装目录，默认 `~/.hmvm` |
 | `HMVM_CURRENT` | 当前激活的版本号（由 `hmvm use` 写入） |
 | `DEVECO_NODE_HOME` | 当前版本的 `tool/node` 路径 |
+| `NODE_HOME` | 同 `DEVECO_NODE_HOME`，供 `hvigor/bin/hvigorw` 识别 |
 | `DEVECO_SDK_HOME` | 当前版本的 `sdk` 路径 |
+| `HDC_SDK_PATH` | HDC 调试工具链路径（`sdk/default/openharmony/toolchains`） |
 | `HMVM_BIN` | 当前版本的 `bin` 目录路径 |
 
 ## 迁移现有配置
