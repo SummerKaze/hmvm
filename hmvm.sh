@@ -208,19 +208,190 @@ hmvm_ls_current() {
   hmvm_echo "none"
 }
 
-# 列出已安装版本
+# 软链接版本的旁路元数据文件路径（存储在版本目录同级，不在软链接内部）
+hmvm_symlink_meta_path() {
+  local VER="${1-}"
+  printf '%s' "$(hmvm_version_dir)/.meta_${VER}.txt"
+}
+
+# 从目录结构中推断版本信息并写入旁路元数据文件（用于软链接安装的版本）
+hmvm_detect_and_save_meta() {
+  local VERSION VPATH META_FILE
+  VERSION="${1-}"
+  VPATH="${2-}"
+  META_FILE="$(hmvm_symlink_meta_path "${VERSION}")"
+
+  local codelinter_ver ohpm_ver hstack_ver hvigor_ver api_ver _v
+  codelinter_ver="-"; ohpm_ver="-"; hstack_ver="-"; hvigor_ver="-"; api_ver="-"
+
+  # 优先从目录内的 version.txt 读取（兼容多种字段命名风格）
+  if [ -f "${VPATH}/version.txt" ]; then
+    _v="$(command grep -iE "^codelinter[[:space:]]*:" "${VPATH}/version.txt" 2>/dev/null \
+      | command sed 's/.*:[[:space:]]*//' | command tr -d '\n\r')"
+    [ -n "${_v}" ] && codelinter_ver="${_v}"
+
+    _v="$(command grep -iE "^ohpm[[:space:]]*:" "${VPATH}/version.txt" 2>/dev/null \
+      | command sed 's/.*:[[:space:]]*//' | command tr -d '\n\r')"
+    [ -n "${_v}" ] && ohpm_ver="${_v}"
+
+    _v="$(command grep -iE "^hstack[[:space:]]*:" "${VPATH}/version.txt" 2>/dev/null \
+      | command sed 's/.*:[[:space:]]*//' | command tr -d '\n\r')"
+    [ -n "${_v}" ] && hstack_ver="${_v}"
+
+    _v="$(command grep -iE "^hvigor[[:space:]]*:" "${VPATH}/version.txt" 2>/dev/null \
+      | command sed 's/.*:[[:space:]]*//' | command tr -d '\n\r')"
+    [ -n "${_v}" ] && hvigor_ver="${_v}"
+
+    _v="$(command grep -iE "^apiVersion[[:space:]]*:" "${VPATH}/version.txt" 2>/dev/null \
+      | command sed 's/.*:[[:space:]]*//' | command tr -d '\n\r')"
+    [ -n "${_v}" ] && api_ver="${_v}"
+  fi
+
+  # 从 hvigor/package.json 补充 hvigor 版本
+  if [ "${hvigor_ver}" = "-" ] && [ -f "${VPATH}/hvigor/package.json" ]; then
+    _v="$(command grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]*"' \
+      "${VPATH}/hvigor/package.json" 2>/dev/null \
+      | head -1 | command sed 's/.*:[[:space:]]*"\(.*\)"/\1/')"
+    [ -n "${_v}" ] && hvigor_ver="${_v}"
+  fi
+
+  # 从 ohpm/package.json 补充 ohpm 版本
+  if [ "${ohpm_ver}" = "-" ] && [ -f "${VPATH}/ohpm/package.json" ]; then
+    _v="$(command grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]*"' \
+      "${VPATH}/ohpm/package.json" 2>/dev/null \
+      | head -1 | command sed 's/.*:[[:space:]]*"\(.*\)"/\1/')"
+    [ -n "${_v}" ] && ohpm_ver="${_v}"
+  fi
+
+  # 从 SDK 目录结构推断 API 版本（取最大数字子目录）
+  if [ "${api_ver}" = "-" ]; then
+    local _sdk
+    for _sdk in "${VPATH}/sdk/default/openharmony" "${VPATH}/sdk/openharmony" "${VPATH}/sdk"; do
+      if [ -d "${_sdk}" ]; then
+        _v="$(command ls -1 "${_sdk}" 2>/dev/null \
+          | command grep -E '^[0-9]+$' | command sort -n | tail -1)"
+        if [ -n "${_v}" ]; then api_ver="${_v}"; break; fi
+      fi
+    done
+  fi
+
+  # 写入标准化元数据（与 version.txt 字段格式保持一致）
+  command mkdir -p "$(hmvm_version_dir)" 2>/dev/null || true
+  printf 'codelinter   : %s\nohpm         : %s\nhstack       : %s\nhvigor       : %s\napiVersion   : %s\n' \
+    "${codelinter_ver}" "${ohpm_ver}" "${hstack_ver}" "${hvigor_ver}" "${api_ver}" \
+    > "${META_FILE}" 2>/dev/null || true
+}
+
+# 从 version.txt 中读取指定字段值，始终返回 0
+# 软链接版本优先读取旁路元数据文件，缺失时懒加载生成
+hmvm_parse_version_field() {
+  local vpath field val version_file
+  vpath="${1-}"
+  field="${2-}"
+  version_file="${vpath}/version.txt"
+
+  # 软链接安装的版本：使用 hmvm 管理的旁路元数据（避免软链接目标格式不兼容）
+  if [ -L "${vpath}" ]; then
+    local meta_file
+    meta_file="$(hmvm_symlink_meta_path "$(basename "${vpath}")")"
+    # 元数据文件不存在时懒加载生成（兼容已安装的旧版本）
+    if [ ! -f "${meta_file}" ]; then
+      hmvm_detect_and_save_meta "$(basename "${vpath}")" "${vpath}" 2>/dev/null || true
+    fi
+    [ -f "${meta_file}" ] && version_file="${meta_file}"
+  fi
+
+  if [ ! -f "${version_file}" ]; then
+    printf '%s' "-"
+    return 0
+  fi
+  val="$(command grep -E "^${field}[[:space:]]*:" "${version_file}" 2>/dev/null \
+    | command sed 's/.*:[[:space:]]*//' | command tr -d '\n\r')"
+  if [ -n "${val}" ]; then
+    printf '%s' "${val}"
+  else
+    printf '%s' "-"
+  fi
+  return 0
+}
+
+# 列出已安装版本（fvm 风格表格）
+# 列: Version | codelinter | ohpm | hstack | hvigor | API | Global | Local
 hmvm_ls() {
-  local VERSION_DIR
+  local VERSION_DIR VERSIONS CURRENT LOCAL_VERSION HMVMRC DIR_SIZE
+  local HDR_SEP MID_SEP BOT_SEP
+  local VER ver_str vpath FIRST
+  local codelinter_ver ohpm_ver hstack_ver hvigor_ver api_ver global_mark local_mark
+
   VERSION_DIR="$(hmvm_version_dir)"
   if [ ! -d "${VERSION_DIR}" ]; then
     return 0
   fi
-  local VERSIONS
-  VERSIONS="$(command ls -1 "${VERSION_DIR}" 2>/dev/null | command sed 's/^v//')"
+
+  VERSIONS="$(command ls -1 "${VERSION_DIR}" 2>/dev/null | command sort -V)"
   if [ -z "${VERSIONS}" ]; then
     return 0
   fi
-  hmvm_echo "${VERSIONS}"
+
+  CURRENT="$(hmvm_ls_current)"
+  LOCAL_VERSION=""
+  if HMVMRC="$(hmvm_find_hmvmrc 2>/dev/null)"; then
+    LOCAL_VERSION="$(hmvm_ensure_version_prefix "$(command cat "${HMVMRC}" 2>/dev/null)")"
+  fi
+
+  DIR_SIZE=""
+  if hmvm_has du; then
+    DIR_SIZE="$(command du -sh "${VERSION_DIR}" 2>/dev/null | command awk '{print $1}')"
+  fi
+
+  hmvm_echo "Cache directory:  $(hmvm_install_dir)/versions/clt"
+  [ -n "${DIR_SIZE}" ] && hmvm_echo "Directory Size: ${DIR_SIZE}"
+  hmvm_echo ""
+
+  # 列宽（内容宽度）: Version=11 codelinter=10 ohpm=5 hstack=6 hvigor=6 API=3 Global=6 Local=5
+  # 分隔线宽 = 内容宽 + 2（两侧空格）
+  HDR_SEP="┌─────────────┬────────────┬───────┬────────┬────────┬─────┬────────┬───────┐"
+  MID_SEP="├─────────────┼────────────┼───────┼────────┼────────┼─────┼────────┼───────┤"
+  BOT_SEP="└─────────────┴────────────┴───────┴────────┴────────┴─────┴────────┴───────┘"
+
+  printf '%s\n' "${HDR_SEP}"
+  printf '│ %-11s │ %-10s │ %-5s │ %-6s │ %-6s │ %-3s │ %-6s │ %-5s │\n' \
+    "Version" "codelinter" "ohpm" "hstack" "hvigor" "API" "Global" "Local"
+  printf '%s\n' "${MID_SEP}"
+
+  FIRST=1
+  while IFS= read -r VER; do
+    if [ -z "${VER}" ]; then continue; fi
+
+    if [ "${FIRST}" = "0" ]; then
+      printf '%s\n' "${MID_SEP}"
+    fi
+    FIRST=0
+
+    ver_str="${VER#v}"
+    vpath="${VERSION_DIR}/${VER}"
+
+    codelinter_ver="$(hmvm_parse_version_field "${vpath}" "codelinter")"
+    ohpm_ver="$(hmvm_parse_version_field "${vpath}" "ohpm")"
+    hstack_ver="$(hmvm_parse_version_field "${vpath}" "hstack")"
+    hvigor_ver="$(hmvm_parse_version_field "${vpath}" "hvigor")"
+    api_ver="$(hmvm_parse_version_field "${vpath}" "apiVersion")"
+
+    global_mark=""
+    if [ "${CURRENT}" = "${VER}" ] || [ "${CURRENT}" = "${ver_str}" ]; then
+      global_mark="●"
+    fi
+    local_mark=""
+    if [ "${LOCAL_VERSION}" = "${VER}" ] || [ "${LOCAL_VERSION}" = "${ver_str}" ]; then
+      local_mark="●"
+    fi
+
+    printf '│ %-11s │ %-10s │ %-5s │ %-6s │ %-6s │ %-3s │ %-6s │ %-5s │\n' \
+      "${ver_str}" "${codelinter_ver}" "${ohpm_ver}" "${hstack_ver}" "${hvigor_ver}" \
+      "${api_ver}" "${global_mark}" "${local_mark}"
+  done <<< "${VERSIONS}"
+
+  printf '%s\n' "${BOT_SEP}"
 }
 
 # 切换版本
@@ -296,8 +467,21 @@ hmvm_install_from_path() {
   command mkdir -p "$(hmvm_version_dir)"
   if [ "${USE_LINK}" = "1" ]; then
     hmvm_echo "Linking HarmonyOS command-line-tools ${VERSION} from ${FROM_PATH}..."
-    if command ln -sf "$(command cd "${FROM_PATH}" && pwd)" "${VERSION_PATH}"; then
+    # 转为绝对路径但不跟随符号链接（避免 zsh CHASE_LINKS 将软链接路径解析成目标物理路径）
+    local FROM_ABS
+    case "${FROM_PATH}" in
+      /*) FROM_ABS="${FROM_PATH}" ;;
+      *)  FROM_ABS="$(pwd)/${FROM_PATH}" ;;
+    esac
+    # 验证路径有效性（[ -f ] 会自动跟随符号链接到目标，此处行为正确）
+    if [ ! -f "${FROM_ABS}/version.txt" ] && [ ! -f "${FROM_ABS}/bin/ohpm" ]; then
+      hmvm_err "hmvm: path '${FROM_ABS}' is not a valid command-line-tools directory."
+      return 1
+    fi
+    if command ln -sf "${FROM_ABS}" "${VERSION_PATH}"; then
       hmvm_echo "Linked HarmonyOS command-line-tools ${VERSION} successfully."
+      # 生成旁路元数据，保证 hmvm list 能显示版本信息
+      hmvm_detect_and_save_meta "${VERSION}" "${VERSION_PATH}" 2>/dev/null || true
       hmvm_use "${VERSION}"
       return $?
     else
