@@ -7,5 +7,11 @@ alias/
 # 本地规划文件
 planDoc/
 
+# hvigor 本地构建缓存
+.hvigor/
+
+# 编译产物 / 运行时二进制
+hmvm
+
 # macOS
 .DS_Store
