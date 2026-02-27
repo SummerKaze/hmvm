@@ -424,21 +424,46 @@ hmvm_use() {
   local VERSION_PATH
   VERSION_PATH="$(hmvm_version_path "${VERSION}")"
 
-  # 设置 PATH：bin 目录 + tool/node/bin
+  # --- PATH 管理：通过 hmvm_change_path 替换旧版本路径，避免多次切换后路径堆积 ---
+
+  # 1. 主 bin 目录（ohpm / hvigorw 启动器 / codelinter / hstack 等）
   PATH="$(hmvm_change_path "${PATH}" "/bin" "${VERSION_PATH}")"
+
+  # 2. Node.js 运行时：hvigor/bin/hvigorw 通过 NODE_HOME 或 PATH 中的 node 执行
+  #    使用 hmvm_change_path 替换旧版本路径（而非直接 prepend 导致路径堆积）
   if [ -d "${VERSION_PATH}/tool/node/bin" ]; then
-    PATH="${VERSION_PATH}/tool/node/bin:${PATH}"
+    PATH="$(hmvm_change_path "${PATH}" "/tool/node/bin" "${VERSION_PATH}")"
   fi
+
+  # 3. HDC 调试工具（hdc 命令，用于连接鸿蒙真机/模拟器）
+  local HDC_TOOLCHAIN="${VERSION_PATH}/sdk/default/openharmony/toolchains"
+  if [ -d "${HDC_TOOLCHAIN}" ]; then
+    PATH="$(hmvm_change_path "${PATH}" "/sdk/default/openharmony/toolchains" "${VERSION_PATH}")"
+    export HDC_SDK_PATH="${HDC_TOOLCHAIN}"
+    # macOS Launch Services 同步，使 GUI 进程（如 DevEco Studio）也能读取
+    if hmvm_has launchctl; then
+      launchctl setenv HDC_SDK_PATH "${HDC_SDK_PATH}" 2>/dev/null || true
+    fi
+  fi
+
   export PATH
 
+  # --- 环境变量 ---
   export DEVECO_NODE_HOME="${VERSION_PATH}/tool/node"
+  # NODE_HOME 供 hvigor/bin/hvigorw 直接识别（与 DEVECO_NODE_HOME 保持同步）
+  export NODE_HOME="${VERSION_PATH}/tool/node"
   export DEVECO_SDK_HOME="${VERSION_PATH}/sdk"
   export HMVM_BIN="${VERSION_PATH}/bin"
   # 记录当前激活版本，供 hmvm current / hmvm list 直接读取，
   # 避免依赖 which ohpm 路径推断（CHASE_LINKS 等选项会跟随软链接导致误判）
   export HMVM_CURRENT="${VERSION}"
 
+  # --- 清空命令哈希缓存，确保 shell 从新 PATH 重新查找命令 ---
   \hash -r 2>/dev/null || true
+  # zsh 额外调用 rehash（hash -r 在部分 zsh 版本中不完全生效）
+  if hmvm_is_zsh; then
+    builtin rehash 2>/dev/null || true
+  fi
 
   hmvm_echo "Now using HarmonyOS command-line-tools ${VERSION}"
   return 0
