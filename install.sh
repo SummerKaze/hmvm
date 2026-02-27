@@ -29,6 +29,7 @@ hmvm_install_dir() {
   fi
 }
 
+# 根据用户默认 shell ($SHELL) 检测 profile，而非当前运行 install 的 shell
 hmvm_detect_profile() {
   if [ "${PROFILE-}" = '/dev/null' ]; then
     return
@@ -42,28 +43,35 @@ hmvm_detect_profile() {
   local DETECTED_PROFILE
   DETECTED_PROFILE=''
 
-  if [ -n "${ZSH_VERSION-}" ]; then
-    if [ -f "${ZDOTDIR:-${HOME}}/.zshrc" ]; then
-      DETECTED_PROFILE="${ZDOTDIR:-${HOME}}/.zshrc"
-    elif [ -f "${ZDOTDIR:-${HOME}}/.zprofile" ]; then
-      DETECTED_PROFILE="${ZDOTDIR:-${HOME}}/.zprofile"
-    fi
-  elif [ -n "${BASH_VERSION-}" ]; then
-    if [ -f "${HOME}/.bashrc" ]; then
-      DETECTED_PROFILE="${HOME}/.bashrc"
-    elif [ -f "${HOME}/.bash_profile" ]; then
-      DETECTED_PROFILE="${HOME}/.bash_profile"
-    fi
-  fi
-
-  if [ -z "${DETECTED_PROFILE}" ]; then
-    for EACH_PROFILE in ".profile" ".bashrc" ".bash_profile" ".zprofile" ".zshrc"; do
-      if [ -f "${HOME}/${EACH_PROFILE}" ]; then
-        DETECTED_PROFILE="${HOME}/${EACH_PROFILE}"
-        break
+  # 优先根据 $SHELL 判断用户默认 shell（避免 bash ./install.sh 时误写 .bash_profile）
+  case "${SHELL-}" in
+    *zsh*)
+      if [ -f "${ZDOTDIR:-${HOME}}/.zshrc" ]; then
+        DETECTED_PROFILE="${ZDOTDIR:-${HOME}}/.zshrc"
+      elif [ -f "${ZDOTDIR:-${HOME}}/.zprofile" ]; then
+        DETECTED_PROFILE="${ZDOTDIR:-${HOME}}/.zprofile"
       fi
-    done
-  fi
+      ;;
+    *bash*)
+      if [ -f "${HOME}/.bashrc" ]; then
+        DETECTED_PROFILE="${HOME}/.bashrc"
+      elif [ -f "${HOME}/.bash_profile" ]; then
+        DETECTED_PROFILE="${HOME}/.bash_profile"
+      fi
+      ;;
+    *)
+      # 回退：按存在性优先选择 zshrc > bashrc > zprofile > bash_profile
+      for EACH_PROFILE in ".zshrc" ".bashrc" ".zprofile" ".bash_profile" ".profile"; do
+        if [ -f "${ZDOTDIR:-${HOME}}/${EACH_PROFILE}" ]; then
+          DETECTED_PROFILE="${ZDOTDIR:-${HOME}}/${EACH_PROFILE}"
+          break
+        elif [ -f "${HOME}/${EACH_PROFILE}" ]; then
+          DETECTED_PROFILE="${HOME}/${EACH_PROFILE}"
+          break
+        fi
+      done
+      ;;
+  esac
 
   if [ -n "${DETECTED_PROFILE}" ]; then
     hmvm_echo "${DETECTED_PROFILE}"
@@ -104,7 +112,7 @@ hmvm_do_install() {
   fi
 
   local HMVM_REPO
-  HMVM_REPO="${HMVM_INSTALL_GITHUB_REPO:-hmvm/hmvm}"
+  HMVM_REPO="${HMVM_INSTALL_GITHUB_REPO:-SummerKaze/hmvm}"
 
   if [ -f "${INSTALL_DIR}/hmvm.sh" ]; then
     hmvm_echo "=> hmvm is already installed in ${INSTALL_DIR}"
