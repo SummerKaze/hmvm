@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# bash/zsh completion for HarmonyOS Version Manager (hmvm)
+
+if ! type hmvm &> /dev/null; then
+  return
+fi
+
+__hmvm_generate_completion() {
+  declare current_word
+  current_word="${COMP_WORDS[COMP_CWORD]}"
+  # shellcheck disable=SC2207
+  COMPREPLY=($(compgen -W "$1" -- "${current_word}"))
+  return 0
+}
+
+__hmvm_commands() {
+  declare current_word
+  current_word="${COMP_WORDS[COMP_CWORD]}"
+
+  COMMANDS='help install use ls list ls-remote current uninstall alias which'
+
+  case "${current_word}" in
+    -*) __hmvm_generate_completion '--save -w' ;;
+    *) __hmvm_generate_completion "${COMMANDS}" ;;
+  esac
+}
+
+__hmvm_installed_versions() {
+  local HMVM_DIR
+  HMVM_DIR="${HMVM_DIR:-${HOME}/.hmvm}"
+  local VERSION_DIR
+  VERSION_DIR="${HMVM_DIR}/versions/clt"
+  local versions
+  if [ -d "${VERSION_DIR}" ]; then
+    versions="$(command ls -1 "${VERSION_DIR}" 2>/dev/null | command sed 's/^v//' | command tr '\n' ' ')"
+  fi
+  __hmvm_generate_completion "${versions:-}"
+}
+
+__hmvm_aliases() {
+  local HMVM_DIR
+  HMVM_DIR="${HMVM_DIR:-${HOME}/.hmvm}"
+  local ALIAS_DIR
+  ALIAS_DIR="${HMVM_DIR}/alias"
+  local aliases
+  aliases=""
+  if [ -d "${ALIAS_DIR}" ]; then
+    aliases="$(command ls -1 "${ALIAS_DIR}" 2>/dev/null | command tr '\n' ' ')"
+  fi
+  __hmvm_generate_completion "${aliases:-} default stable"
+}
+
+__hmvm() {
+  declare previous_word
+  previous_word="${COMP_WORDS[COMP_CWORD - 1]}"
+
+  case "${previous_word}" in
+    use|uninstall) __hmvm_installed_versions ;;
+    alias)
+      if [ "${COMP_CWORD}" -eq 2 ]; then
+        __hmvm_aliases
+      else
+        __hmvm_installed_versions
+      fi
+      ;;
+    install)
+      __hmvm_installed_versions
+      ;;
+    *)
+      __hmvm_commands
+      ;;
+  esac
+
+  return 0
+}
+
+# ZSH compatibility
+if [[ -n ${ZSH_VERSION-} ]]; then
+  if ! command -v compinit > /dev/null 2>&1; then
+    autoload -U +X compinit && compinit
+  fi
+  autoload -U +X bashcompinit && bashcompinit
+fi
+
+complete -o default -F __hmvm hmvm

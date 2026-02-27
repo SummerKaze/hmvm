@@ -1,0 +1,12 @@
+# 用户安装的版本目录（可能很大）
+versions/
+
+# 用户运行时数据
+alias/
+
+# 本地规划文件
+plan-time.md
+startTime.png
+
+# macOS
+.DS_Store
