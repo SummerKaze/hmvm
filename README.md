@@ -1,5 +1,7 @@
 # hmvm - HarmonyOS Version Manager
 
+> 中文 | [English](README_EN.md)
+
 基于 [nvm](https://github.com/nvm-sh/nvm) 架构魔改的鸿蒙开发环境版本管理工具，用于管理 HarmonyOS command-line-tools 多版本切换。
 
 ## 功能特性
