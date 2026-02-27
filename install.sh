@@ -183,7 +183,7 @@ hmvm_do_install() {
   command printf "${SOURCE_STR}"
   hmvm_echo ""
   hmvm_echo "=> To install HarmonyOS command-line-tools from your existing installation:"
-  hmvm_echo "   hmvm install 6.1.0.609 --from /path/to/command-line-tools"
+  hmvm_echo "   hmvm install 6.1.0 --from /path/to/command-line-tools"
   hmvm_echo ""
 }
 

@@ -7,7 +7,7 @@
 { # this ensures the entire script is downloaded #
 
 HMVM_SCRIPT_SOURCE="$_"
-HMVM_VERSION="1.2"
+HMVM_VERSION="1.2.1"
 
 # =============================================================================
 # 工具函数（移植自 nvm）
