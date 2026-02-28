@@ -12,10 +12,13 @@
 - **环境变量自动设置**：`hmvm use` 自动设置 `DEVECO_NODE_HOME`、`DEVECO_SDK_HOME`、`HMVM_CURRENT`
 - **项目配置**：支持 `.hmvmrc` 指定项目所需版本
 - **别名**：支持 `default` 等别名，新建 shell 自动激活
+- **跨平台**：支持 macOS / Linux（bash/zsh）和 Windows（PowerShell 5.1+）
 
 ## 安装
 
-### 从本地仓库安装
+### macOS / Linux
+
+#### 从本地仓库安装
 
 ```bash
 git clone https://github.com/SummerKaze/hmvm.git ~/.hmvm
@@ -25,13 +28,32 @@ cd ~/.hmvm
 
 安装脚本会将 source 指令写入 shell profile（`~/.zshrc` 或 `~/.bashrc`），重启终端或 `source ~/.zshrc` 后生效。
 
-### 从 GitHub 安装
+#### 从 GitHub 安装
 
 ```bash
 curl -o- https://raw.githubusercontent.com/SummerKaze/hmvm/main/install.sh | bash
 # 或
 wget -qO- https://raw.githubusercontent.com/SummerKaze/hmvm/main/install.sh | bash
 ```
+
+### Windows（PowerShell 5.1+）
+
+**一键安装（无需管理员权限）：**
+
+```powershell
+irm https://raw.githubusercontent.com/SummerKaze/hmvm/main/install.ps1 | iex
+```
+
+**或从本地仓库安装：**
+
+```powershell
+git clone https://github.com/SummerKaze/hmvm.git $HOME\.hmvm
+. "$HOME\.hmvm\install.ps1"
+```
+
+安装脚本会将加载指令写入 PowerShell profile（`$PROFILE`），重启终端或执行 `. $PROFILE` 后生效。
+
+> **Windows 提示**：`--link` 选项在 Windows 上使用 **NTFS Junction**（目录联接），无需管理员权限，效果与 macOS/Linux 的符号链接相同。卸载时只删除联接本身，原始目录不受影响。
 
 ## 使用
 
@@ -164,17 +186,22 @@ hmvm uninstall 6.0.2
 
 ## 目录结构
 
+**macOS / Linux** 默认路径 `~/.hmvm`，**Windows** 默认路径 `$HOME\.hmvm`：
+
 ```
-$HMVM_DIR/                        # 默认 ~/.hmvm
-├── hmvm.sh                       # 主脚本（source 到 shell profile）
-├── install.sh                    # 安装脚本
-├── bash_completion               # 自动补全
+$HMVM_DIR/
+├── hmvm.sh                       # macOS/Linux 主脚本（source 到 shell profile）
+├── hmvm.ps1                      # Windows 主脚本（dot-source 到 $PROFILE）
+├── install.sh                    # macOS/Linux 安装脚本
+├── install.ps1                   # Windows 安装脚本
+├── bash_completion               # macOS/Linux 自动补全
 ├── versions.json                 # 远程版本配置（可选）
 ├── versions/
 │   └── clt/                      # command-line-tools 版本目录
-│       ├── v6.1.0/           # 完整复制安装的版本
-│       ├── v6.0.2 -> /path/...   # 符号链接安装的版本
-│       └── .meta_v6.0.2.txt      # 符号链接版本的旁路元数据（自动生成）
+│       ├── v6.1.0/               # 完整复制安装的版本
+│       ├── v6.0.2 -> /path/...   # 符号链接安装的版本（macOS/Linux）
+│       ├── v6.0.2                # NTFS Junction 安装的版本（Windows）
+│       └── .meta_v6.0.2.txt      # 符号链接/Junction 版本的旁路元数据（自动生成）
 └── alias/                        # 版本别名
     └── default                   # 默认版本
 ```
@@ -211,10 +238,11 @@ hmvm global 6.1.0   # 设置全局默认版本，新建 shell 自动激活
 
 ## 技术说明
 
-- 纯 Shell 实现，POSIX 兼容，支持 bash、zsh
+- **macOS / Linux**：纯 Shell 实现，POSIX 兼容，支持 bash、zsh
+- **Windows**：PowerShell 5.1+ 实现，与 Shell 版功能对齐；`--link` 使用 NTFS Junction（无需管理员权限）
 - PATH 管理逻辑参考 nvm；版本表格展示参考 fvm
-- 符号链接版本通过旁路元数据文件（`.meta_v*.txt`）存储版本信息，`hmvm list` 懒加载生成
-- `hmvm use` 写入 `$HMVM_CURRENT` 环境变量，`hmvm current` 直接读取，避免 zsh `CHASE_LINKS` 路径推断失效问题
+- 符号链接 / Junction 版本通过旁路元数据文件（`.meta_v*.txt`）存储版本信息，`hmvm list` 懒加载生成
+- `hmvm use` 写入 `$HMVM_CURRENT` 环境变量，`hmvm current` 直接读取，避免路径推断失效问题
 
 ## TODO
 

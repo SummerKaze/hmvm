@@ -12,10 +12,13 @@ A HarmonyOS development environment version management tool based on the [nvm](h
 - **Automatic Environment Variables**: `hmvm use` automatically sets `DEVECO_NODE_HOME`, `DEVECO_SDK_HOME`, `HMVM_CURRENT`
 - **Project Configuration**: Supports `.hmvmrc` to specify project-required versions
 - **Aliases**: Supports aliases like `default`, automatically activated in new shells
+- **Cross-platform**: Supports macOS / Linux (bash/zsh) and Windows (PowerShell 5.1+)
 
 ## Installation
 
-### Install from Local Repository
+### macOS / Linux
+
+#### Install from Local Repository
 
 ```bash
 git clone https://github.com/SummerKaze/hmvm.git ~/.hmvm
@@ -25,13 +28,32 @@ cd ~/.hmvm
 
 The install script will write the source command to your shell profile (`~/.zshrc` or `~/.bashrc`). Restart your terminal or run `source ~/.zshrc` to apply changes.
 
-### Install from GitHub
+#### Install from GitHub
 
 ```bash
 curl -o- https://raw.githubusercontent.com/SummerKaze/hmvm/main/install.sh | bash
 # or
 wget -qO- https://raw.githubusercontent.com/SummerKaze/hmvm/main/install.sh | bash
 ```
+
+### Windows (PowerShell 5.1+)
+
+**One-line install (no admin rights required):**
+
+```powershell
+irm https://raw.githubusercontent.com/SummerKaze/hmvm/main/install.ps1 | iex
+```
+
+**Or install from a local repository:**
+
+```powershell
+git clone https://github.com/SummerKaze/hmvm.git $HOME\.hmvm
+. "$HOME\.hmvm\install.ps1"
+```
+
+The install script will write the load instruction to your PowerShell profile (`$PROFILE`). Restart your terminal or run `. $PROFILE` to apply changes.
+
+> **Windows Note**: The `--link` option on Windows uses an **NTFS Junction** (directory junction), which requires no admin privileges and behaves like a symbolic link on macOS/Linux. Uninstalling only removes the junction itself; the original directory is unaffected.
 
 ## Usage
 
@@ -164,17 +186,22 @@ hmvm uninstall 6.0.2
 
 ## Directory Structure
 
+Default path `~/.hmvm` on **macOS / Linux**, `$HOME\.hmvm` on **Windows**:
+
 ```
-$HMVM_DIR/                        # Default ~/.hmvm
-├── hmvm.sh                       # Main script (sourced to shell profile)
-├── install.sh                    # Install script
-├── bash_completion               # Auto-completion
+$HMVM_DIR/
+├── hmvm.sh                       # macOS/Linux main script (sourced to shell profile)
+├── hmvm.ps1                      # Windows main script (dot-sourced to $PROFILE)
+├── install.sh                    # macOS/Linux install script
+├── install.ps1                   # Windows install script
+├── bash_completion               # macOS/Linux auto-completion
 ├── versions.json                 # Remote version configuration (optional)
 ├── versions/
 │   └── clt/                      # command-line-tools version directory
 │       ├── v6.1.0/               # Fully copied installed version
-│       ├── v6.0.2 -> /path/...   # Symbolic link installed version
-│       └── .meta_v6.0.2.txt      # Bypass metadata for symlinked versions (auto-generated)
+│       ├── v6.0.2 -> /path/...   # Symbolic link installed version (macOS/Linux)
+│       ├── v6.0.2                # NTFS Junction installed version (Windows)
+│       └── .meta_v6.0.2.txt      # Bypass metadata for symlinked/junction versions (auto-generated)
 └── alias/                        # Version aliases
     └── default                   # Default version
 ```
@@ -211,10 +238,11 @@ hmvm global 6.1.0   # Set global default version, auto-activated in new shells
 
 ## Technical Notes
 
-- Pure Shell implementation, POSIX compatible, supports bash, zsh
+- **macOS / Linux**: Pure Shell implementation, POSIX compatible, supports bash, zsh
+- **Windows**: PowerShell 5.1+ implementation, feature-aligned with the Shell version; `--link` uses NTFS Junction (no admin rights required)
 - PATH management logic references nvm; version table display references fvm
-- Symlinked versions store version information via bypass metadata files (`.meta_v*.txt`), `hmvm list` lazy-loads generation
-- `hmvm use` writes to `$HMVM_CURRENT` environment variable, `hmvm current` reads directly, avoiding zsh `CHASE_LINKS` path inference failure issues
+- Symlinked / Junction versions store version information via bypass metadata files (`.meta_v*.txt`), `hmvm list` lazy-loads generation
+- `hmvm use` writes to `$HMVM_CURRENT` environment variable, `hmvm current` reads directly, avoiding path inference failure issues
 
 ## TODO
 
