@@ -4,6 +4,8 @@
 
 A HarmonyOS development environment version management tool based on the [nvm](https://github.com/nvm-sh/nvm) architecture, designed for managing multiple versions of HarmonyOS command-line-tools.
 
+**Why hmvm?** HarmonyOS development relies on the `command-line-tools` toolchain (ohpm, hvigor, hdc, etc.), and different projects often need to lock different versions. Manually editing environment variables is tedious and error-prone—hmvm handles multi-version switching with a single command, just like nvm for Node.js or fvm for Flutter.
+
 ## Features
 
 - **Multi-version Management**: Install, switch, and uninstall different versions of HarmonyOS command-line-tools
@@ -18,7 +20,15 @@ A HarmonyOS development environment version management tool based on the [nvm](h
 
 ### macOS / Linux
 
-#### Install from Local Repository
+**One-line install (Recommended):**
+
+```bash
+curl -o- https://raw.githubusercontent.com/SummerKaze/hmvm/main/install.sh | bash
+# or
+wget -qO- https://raw.githubusercontent.com/SummerKaze/hmvm/main/install.sh | bash
+```
+
+**Install from Local Repository:**
 
 ```bash
 git clone https://github.com/SummerKaze/hmvm.git ~/.hmvm
@@ -27,14 +37,6 @@ cd ~/.hmvm
 ```
 
 The install script will write the source command to your shell profile (`~/.zshrc` or `~/.bashrc`). Restart your terminal or run `source ~/.zshrc` to apply changes.
-
-#### Install from GitHub
-
-```bash
-curl -o- https://raw.githubusercontent.com/SummerKaze/hmvm/main/install.sh | bash
-# or
-wget -qO- https://raw.githubusercontent.com/SummerKaze/hmvm/main/install.sh | bash
-```
 
 ### Windows (PowerShell 5.1+)
 
@@ -57,9 +59,13 @@ The install script will write the load instruction to your PowerShell profile (`
 
 ## Usage
 
+### Workflow Overview
+
+![Workflow](./docs/img/使用工作流.png)
+
 ### Install command-line-tools Version
 
-> **⚠️ Online download not yet supported** (TODO: Huawei account authentication, planned for future support).  
+> **⚠️ Online download not yet supported** (TODO: Huawei account authentication, planned for future support).
 > Currently, please use the following two local installation methods to import existing command-line-tools directories.
 
 #### Method 1: Full Copy Installation
@@ -89,7 +95,7 @@ Now using HarmonyOS command-line-tools v6.0.2
 ### View Installed Versions
 
 ```
-$ hmvm ls          
+$ hmvm ls
 Cache directory:  /Users/h1007/GitHub/hmvm/versions/clt
 Directory Size: 6.1G
 
@@ -168,7 +174,9 @@ hmvm uninstall 6.0.2
 
 > For symlinked versions: only deletes the link, the original command-line-tools directory is not affected.
 
-### Complete Command List
+### Command Reference
+
+![Command Reference](./docs/img/命令速查.png)
 
 | Command | Description |
 |---------|-------------|
@@ -218,6 +226,14 @@ $HMVM_DIR/
 | `HDC_SDK_PATH` | HDC debugging toolchain path (`sdk/default/openharmony/toolchains`) |
 | `HMVM_BIN` | Current version's `bin` directory path |
 
+## Technical Notes
+
+- **macOS / Linux**: Pure Shell implementation, POSIX compatible, supports bash, zsh
+- **Windows**: PowerShell 5.1+ implementation, feature-aligned with the Shell version; `--link` uses NTFS Junction (no admin rights required)
+- PATH management logic references nvm; version table display references fvm
+- Symlinked / Junction versions store version information via bypass metadata files (`.meta_v*.txt`), `hmvm list` lazy-loads generation
+- `hmvm use` writes to `$HMVM_CURRENT` environment variable, `hmvm current` reads directly, avoiding path inference failure issues
+
 ## Migrate Existing Configuration
 
 If you have manually configured command-line-tools paths in `~/.zshrc`:
@@ -236,13 +252,9 @@ hmvm install 6.1.0 --from ~/command-line-tools --link
 hmvm global 6.1.0   # Set global default version, auto-activated in new shells
 ```
 
-## Technical Notes
+## Star History
 
-- **macOS / Linux**: Pure Shell implementation, POSIX compatible, supports bash, zsh
-- **Windows**: PowerShell 5.1+ implementation, feature-aligned with the Shell version; `--link` uses NTFS Junction (no admin rights required)
-- PATH management logic references nvm; version table display references fvm
-- Symlinked / Junction versions store version information via bypass metadata files (`.meta_v*.txt`), `hmvm list` lazy-loads generation
-- `hmvm use` writes to `$HMVM_CURRENT` environment variable, `hmvm current` reads directly, avoiding path inference failure issues
+[![Star History Chart](https://api.star-history.com/svg?repos=SummerKaze/hmvm&type=Date)](https://star-history.com/#SummerKaze/hmvm&Date)
 
 ## TODO
 

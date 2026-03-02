@@ -2,7 +2,9 @@
 
 > 中文 | [English](README_EN.md)
 
-基于 [nvm](https://github.com/nvm-sh/nvm) 架构魔改的鸿蒙开发环境版本管理工具，用于管理 HarmonyOS command-line-tools 多版本切换。
+基于 [nvm](https://github.com/nvm-sh/nvm) 架构的鸿蒙开发环境版本管理工具，用于管理 HarmonyOS command-line-tools 多版本切换。
+
+**为什么需要 hmvm？** 鸿蒙开发依赖 `command-line-tools` 工具链（ohpm、hvigor、hdc 等），不同项目往往需要锁定不同版本。手动改环境变量既繁琐又容易出错——hmvm 一条命令搞定多版本切换，就像 Node.js 的 nvm、Flutter 的 fvm。
 
 ## 功能特性
 
@@ -18,7 +20,15 @@
 
 ### macOS / Linux
 
-#### 从本地仓库安装
+**一键安装（推荐）：**
+
+```bash
+curl -o- https://raw.githubusercontent.com/SummerKaze/hmvm/main/install.sh | bash
+# 或
+wget -qO- https://raw.githubusercontent.com/SummerKaze/hmvm/main/install.sh | bash
+```
+
+**从本地仓库安装：**
 
 ```bash
 git clone https://github.com/SummerKaze/hmvm.git ~/.hmvm
@@ -27,14 +37,6 @@ cd ~/.hmvm
 ```
 
 安装脚本会将 source 指令写入 shell profile（`~/.zshrc` 或 `~/.bashrc`），重启终端或 `source ~/.zshrc` 后生效。
-
-#### 从 GitHub 安装
-
-```bash
-curl -o- https://raw.githubusercontent.com/SummerKaze/hmvm/main/install.sh | bash
-# 或
-wget -qO- https://raw.githubusercontent.com/SummerKaze/hmvm/main/install.sh | bash
-```
 
 ### Windows（PowerShell 5.1+）
 
@@ -57,9 +59,13 @@ git clone https://github.com/SummerKaze/hmvm.git $HOME\.hmvm
 
 ## 使用
 
+### 工作流程概览
+
+![使用工作流](./docs/img/使用工作流.png)
+
 ### 安装 command-line-tools 版本
 
-> **⚠️ 在线下载暂不支持**（TODO：华为账号登录鉴权，后续计划支持）。  
+> **⚠️ 在线下载暂不支持**（TODO：华为账号登录鉴权，后续计划支持）。
 > 目前请通过以下两种本地安装方式导入已有的 command-line-tools 目录。
 
 #### 方式一：完整复制安装
@@ -89,7 +95,7 @@ Now using HarmonyOS command-line-tools v6.0.2
 ### 查看已安装版本
 
 ```
-$ hmvm ls          
+$ hmvm ls
 Cache directory:  /Users/h1007/GitHub/hmvm/versions/clt
 Directory Size: 6.1G
 
@@ -168,7 +174,9 @@ hmvm uninstall 6.0.2
 
 > 符号链接安装的版本：只删除链接，原始 command-line-tools 目录不受影响。
 
-### 完整命令列表
+### 命令速查
+
+![命令速查](./docs/img/命令速查.png)
 
 | 命令 | 说明 |
 |------|------|
@@ -218,6 +226,14 @@ $HMVM_DIR/
 | `HDC_SDK_PATH` | HDC 调试工具链路径（`sdk/default/openharmony/toolchains`） |
 | `HMVM_BIN` | 当前版本的 `bin` 目录路径 |
 
+## 技术说明
+
+- **macOS / Linux**：纯 Shell 实现，POSIX 兼容，支持 bash、zsh
+- **Windows**：PowerShell 5.1+ 实现，与 Shell 版功能对齐；`--link` 使用 NTFS Junction（无需管理员权限）
+- PATH 管理逻辑参考 nvm；版本表格展示参考 fvm
+- 符号链接 / Junction 版本通过旁路元数据文件（`.meta_v*.txt`）存储版本信息，`hmvm list` 懒加载生成
+- `hmvm use` 写入 `$HMVM_CURRENT` 环境变量，`hmvm current` 直接读取，避免路径推断失效问题
+
 ## 迁移现有配置
 
 若已在 `~/.zshrc` 中手动配置 command-line-tools 路径：
@@ -236,13 +252,9 @@ hmvm install 6.1.0 --from ~/command-line-tools --link
 hmvm global 6.1.0   # 设置全局默认版本，新建 shell 自动激活
 ```
 
-## 技术说明
+## Star History
 
-- **macOS / Linux**：纯 Shell 实现，POSIX 兼容，支持 bash、zsh
-- **Windows**：PowerShell 5.1+ 实现，与 Shell 版功能对齐；`--link` 使用 NTFS Junction（无需管理员权限）
-- PATH 管理逻辑参考 nvm；版本表格展示参考 fvm
-- 符号链接 / Junction 版本通过旁路元数据文件（`.meta_v*.txt`）存储版本信息，`hmvm list` 懒加载生成
-- `hmvm use` 写入 `$HMVM_CURRENT` 环境变量，`hmvm current` 直接读取，避免路径推断失效问题
+[![Star History Chart](https://api.star-history.com/svg?repos=SummerKaze/hmvm&type=Date)](https://star-history.com/#SummerKaze/hmvm&Date)
 
 ## TODO
 
