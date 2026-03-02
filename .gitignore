@@ -4,6 +4,9 @@ versions/
 # 用户运行时数据
 alias/
 
+# 动态生成的 shim 包装脚本（由 hmvm use 自动创建）
+shims/
+
 # 本地规划文件
 planDoc/
 

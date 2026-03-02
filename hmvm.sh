@@ -7,7 +7,7 @@
 { # this ensures the entire script is downloaded #
 
 HMVM_SCRIPT_SOURCE="$_"
-HMVM_VERSION="1.2.1"
+HMVM_VERSION="1.2.2"
 
 # =============================================================================
 # 工具函数（移植自 nvm）
@@ -70,6 +70,41 @@ hmvm_install_dir() {
   else
     hmvm_default_install_dir
   fi
+}
+
+# Shims 目录：存放绕过 SDK 工具链问题的包装脚本
+hmvm_shims_dir() {
+  printf %s "$(hmvm_install_dir)/shims"
+}
+
+# 创建 diff shim，绕过 OpenHarmony SDK toolchains 中不符合 GNU 规范的 diff。
+# SDK 自带的 toolchains/diff 不支持 --version/-v 等标准参数，会导致
+# autoconf/cmake 等构建工具的 configure 检测报 "illegal option" 错误。
+hmvm_ensure_diff_shim() {
+  local SHIMS SHIM_FILE
+  SHIMS="$(hmvm_shims_dir)"
+  command mkdir -p "${SHIMS}" 2>/dev/null || return 0
+  SHIM_FILE="${SHIMS}/diff"
+  # shim 已存在且包含标记则跳过（幂等，避免重复写入）
+  if [ -x "${SHIM_FILE}" ] && command grep -q 'hmvm shim' "${SHIM_FILE}" 2>/dev/null; then
+    return 0
+  fi
+  # 依次尝试已知系统路径，找到第一个可用的原生 diff 并转发调用
+  command cat > "${SHIM_FILE}" << 'HMVM_SHIM_EOF'
+#!/bin/sh
+# hmvm shim: bypass OpenHarmony SDK non-GNU diff
+# OpenHarmony SDK toolchains/diff 不符合 GNU 规范（不支持 --version 等参数），
+# 会导致 autoconf/cmake 等构建工具的 configure 检测失败。
+# 此脚本将 diff 调用路由到系统原生 diff 实现。
+for _d in /opt/homebrew/bin /usr/bin /usr/local/bin /bin /usr/gnu/bin; do
+  if [ -x "${_d}/diff" ]; then
+    exec "${_d}/diff" "$@"
+  fi
+done
+>&2 printf 'hmvm: cannot find system diff. Please install GNU diff (e.g. brew install diffutils).\n'
+exit 1
+HMVM_SHIM_EOF
+  command chmod +x "${SHIM_FILE}" 2>/dev/null || true
 }
 
 # 版本目录：$HMVM_DIR/versions/clt/vX.X.X
@@ -449,6 +484,16 @@ hmvm_use() {
     if hmvm_has launchctl; then
       launchctl setenv HDC_SDK_PATH "${HDC_SDK_PATH}" 2>/dev/null || true
     fi
+  fi
+
+  # 4. diff shim：SDK toolchains/diff 不符合 GNU 规范，会导致 autoconf/cmake 等
+  #    构建工具的 configure 脚本检测失败。在 shims 目录放置包装脚本并确保其
+  #    位于 toolchains 之前，使系统原生 diff 优先被调用。
+  local SHIMS_DIR
+  SHIMS_DIR="$(hmvm_shims_dir)"
+  hmvm_ensure_diff_shim 2>/dev/null || true
+  if ! hmvm_echo "${PATH}" | hmvm_grep -q "${SHIMS_DIR}"; then
+    PATH="${SHIMS_DIR}:${PATH}"
   fi
 
   export PATH

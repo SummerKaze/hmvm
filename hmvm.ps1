@@ -6,7 +6,7 @@
 #   $env:HMVM_DIR = "$HOME\.hmvm"
 #   . "$env:HMVM_DIR\hmvm.ps1"  # This loads hmvm
 
-$script:HMVM_VERSION = "1.2.1"
+$script:HMVM_VERSION = "1.2.2"
 
 # =============================================================================
 # 路径/目录辅助函数
@@ -36,6 +36,50 @@ function hmvm_ensure_version_prefix {
 
 function hmvm_alias_path {
     return Join-Path (hmvm_install_dir) "alias"
+}
+
+# Shims 目录：存放绕过 SDK 工具链问题的包装脚本
+function hmvm_shims_dir {
+    return Join-Path (hmvm_install_dir) "shims"
+}
+
+# 创建 diff.cmd shim，绕过 OpenHarmony SDK toolchains 中不符合 GNU 规范的 diff。
+# SDK 自带的 toolchains/diff.exe 不支持 --version/-v 等标准参数，会导致
+# Git Bash / MSYS2 下 autoconf/cmake 等构建工具的 configure 检测失败。
+function hmvm_ensure_diff_shim {
+    $shimsDir = hmvm_shims_dir
+    if (-not (Test-Path $shimsDir)) {
+        New-Item -ItemType Directory -Path $shimsDir -Force | Out-Null
+    }
+    $shimFile = Join-Path $shimsDir "diff.cmd"
+    # shim 已存在则跳过（幂等）
+    if (Test-Path $shimFile) { return }
+    # 依次查找 Git for Windows / MSYS2 / Cygwin 中的 GNU diff 并转发调用
+    $content = @'
+@echo off
+REM hmvm shim: bypass OpenHarmony SDK non-GNU diff
+REM OpenHarmony SDK toolchains/diff.exe 不符合 GNU 规范，会导致 Git Bash/MSYS2 下
+REM autoconf/cmake 等构建工具的 configure 检测失败。
+REM 此脚本将 diff 调用路由到 Git for Windows 或其他 GNU diff 实现。
+setlocal
+for %%d in (
+    "%ProgramFiles%\Git\usr\bin\diff.exe"
+    "%ProgramFiles(x86)%\Git\usr\bin\diff.exe"
+    "%LOCALAPPDATA%\Programs\Git\usr\bin\diff.exe"
+    "C:\msys64\usr\bin\diff.exe"
+    "C:\msys32\usr\bin\diff.exe"
+    "C:\cygwin64\bin\diff.exe"
+    "C:\cygwin\bin\diff.exe"
+) do (
+    if exist %%d (
+        %%d %*
+        exit /b %ERRORLEVEL%
+    )
+)
+echo hmvm: GNU diff not found. Install Git for Windows or add GNU diff to PATH. 1>&2
+exit /b 1
+'@
+    [System.IO.File]::WriteAllText($shimFile, $content, [System.Text.Encoding]::ASCII)
 }
 
 # =============================================================================
@@ -95,11 +139,14 @@ function hmvm_resolve_version {
 
 function hmvm_strip_hmvm_paths {
     param([string]$PathStr)
-    $hmvmDir = hmvm_install_dir
-    $prefix  = "$hmvmDir\versions\"
+    $hmvmDir  = hmvm_install_dir
+    $shimsDir = Join-Path $hmvmDir "shims"
+    $prefix   = "$hmvmDir\versions\"
     return ($PathStr -split ';') | Where-Object {
         $_ -ne '' -and
-        -not $_.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)
+        -not $_.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase) -and
+        # 同时清除旧的 shims 路径，以便在 prepend 中以正确顺序重新添加
+        -not $_.TrimEnd('\').Equals($shimsDir.TrimEnd('\'), [System.StringComparison]::OrdinalIgnoreCase)
     }
 }
 
@@ -285,7 +332,14 @@ function hmvm_use {
     # 2. Node.js 运行时（Windows 下 node.exe 直接在 tool\node\，无 bin 子目录）
     if (Test-Path "$vpath\tool\node") { $prepend.Add("$vpath\tool\node") }
 
-    # 3. HDC 调试工具
+    # 3. diff shim（必须在 toolchains 之前加入）：SDK toolchains/diff.exe 不符合
+    #    GNU 规范，会导致 Git Bash/MSYS2 下 autoconf/cmake configure 检测失败。
+    #    shims 目录中的 diff.cmd 将调用转发至 Git for Windows 等 GNU diff 实现。
+    $shimsDir = hmvm_shims_dir
+    hmvm_ensure_diff_shim
+    $prepend.Add($shimsDir)
+
+    # 4. HDC 调试工具
     $hdc = "$vpath\sdk\default\openharmony\toolchains"
     if (Test-Path $hdc) {
         $prepend.Add($hdc)
