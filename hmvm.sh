@@ -169,6 +169,39 @@ hmvm_change_path() {
   fi
 }
 
+# =============================================================================
+# Node 环境清理（函数级注释）
+# 目的：彻底移除 hmvm 对 Node 的影响，保障 Node 全程由 nvm/系统管理。
+# 行为：
+# - 从 PATH 中剔除位于 $(hmvm_install_dir)/versions/.../tool/node/bin 的条目
+# - 清除 DEVECO_NODE_HOME 与 NODE_HOME
+# 说明：仅清理 hmvm 下的 Node，不影响其他路径来源的 node。
+# =============================================================================
+hmvm_strip_node_from_path() {
+  local PATH_IN HMVM_ROOT
+  PATH_IN="${1-}"
+  HMVM_ROOT="$(hmvm_install_dir)"
+  if [ -z "${PATH_IN}" ]; then
+    return
+  fi
+  command printf %s "${PATH_IN}" | command awk -v RS=: -v ORS=: -v hmvm_root="${HMVM_ROOT}" '
+    index($0, hmvm_root) == 1 {
+      path = substr($0, length(hmvm_root) + 1)
+      # 仅移除 hmvm 自身注入的 tool/node/bin
+      # 实际路径结构：versions/clt/<version>/tool/node/bin，需匹配两层目录分量
+      if (path ~ "^/versions/[^/]+/[^/]+/tool/node/bin/?$") { next }
+    }
+    { printf "%s%s", sep, $0; sep=RS }'
+}
+
+# 调用包装：在 hmvm_use 前/中调用，确保平滑迁移旧行为
+hmvm_cleanup_node_env() {
+  PATH="$(hmvm_strip_node_from_path "${PATH}")"
+  export PATH
+  unset DEVECO_NODE_HOME
+  unset NODE_HOME
+}
+
 # 检查版本是否已安装（软链接存在即视为已安装；否则检查 version.txt 或 bin/ohpm）
 hmvm_is_version_installed() {
   local VERSION_PATH
@@ -466,14 +499,13 @@ hmvm_use() {
 
   # --- PATH 管理：通过 hmvm_change_path 替换旧版本路径，避免多次切换后路径堆积 ---
 
+  # 0. 先清理任何历史遗留的 hmvm Node 注入，确保 Node 完全交由 nvm/系统管理
+  hmvm_cleanup_node_env
+
   # 1. 主 bin 目录（ohpm / hvigorw 启动器 / codelinter / hstack 等）
   PATH="$(hmvm_change_path "${PATH}" "/bin" "${VERSION_PATH}")"
 
-  # 2. Node.js 运行时：hvigor/bin/hvigorw 通过 NODE_HOME 或 PATH 中的 node 执行
-  #    使用 hmvm_change_path 替换旧版本路径（而非直接 prepend 导致路径堆积）
-  if [ -d "${VERSION_PATH}/tool/node/bin" ]; then
-    PATH="$(hmvm_change_path "${PATH}" "/tool/node/bin" "${VERSION_PATH}")"
-  fi
+  # 2. Node.js 运行时：不再由 hmvm 注入，统一交由 nvm/系统管理
 
   # 3. HDC 调试工具（hdc 命令，用于连接鸿蒙真机/模拟器）
   local HDC_TOOLCHAIN="${VERSION_PATH}/sdk/default/openharmony/toolchains"
@@ -499,9 +531,7 @@ hmvm_use() {
   export PATH
 
   # --- 环境变量 ---
-  export DEVECO_NODE_HOME="${VERSION_PATH}/tool/node"
-  # NODE_HOME 供 hvigor/bin/hvigorw 直接识别（与 DEVECO_NODE_HOME 保持同步）
-  export NODE_HOME="${VERSION_PATH}/tool/node"
+  # Node 相关环境变量不再由 hmvm 设置，保持为空以便外部管理器接管
   export DEVECO_SDK_HOME="${VERSION_PATH}/sdk"
   export HMVM_BIN="${VERSION_PATH}/bin"
   # 记录当前激活版本，供 hmvm current / hmvm list 直接读取，

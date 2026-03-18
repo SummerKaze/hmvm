@@ -151,6 +151,30 @@ function hmvm_strip_hmvm_paths {
 }
 
 # =============================================================================
+# Node 环境清理（函数级注释）
+# 目的：彻底移除 hmvm 对 Node 的影响，保障 Node 全程由 nvm/系统管理（Windows 侧）。
+# 行为：
+# - 从 PATH 中剔除位于 $env:HMVM_DIR\versions\...\tool\node 的条目
+# - 清除 $env:DEVECO_NODE_HOME 与 $env:NODE_HOME
+# 说明：仅清理 hmvm 下的 Node，不影响其他来源。
+# =============================================================================
+function hmvm_strip_node_from_path {
+    param([string]$PathStr)
+    $hmvmDir = hmvm_install_dir
+    $needle  = "$hmvmDir\versions\"
+    return ($PathStr -split ';') | Where-Object {
+        $_ -ne '' -and -not ($_ -like "$needle*\tool\node" -or $_ -like "$needle*\tool\node\")
+    }
+}
+
+function hmvm_cleanup_node_env {
+    $parts = @(hmvm_strip_node_from_path $env:PATH)
+    $env:PATH = ($parts | Where-Object { $_ -ne '' }) -join ';'
+    Remove-Item Env:DEVECO_NODE_HOME -ErrorAction SilentlyContinue | Out-Null
+    Remove-Item Env:NODE_HOME        -ErrorAction SilentlyContinue | Out-Null
+}
+
+# =============================================================================
 # 旁路元数据（Junction 安装版本的版本信息）
 # =============================================================================
 
@@ -322,15 +346,16 @@ function hmvm_use {
 
     $vpath = hmvm_version_path $Version
 
-    # 移除旧版本路径，避免多次切换后 PATH 堆积
+    # 先清理 hmvm 对 Node 的任何历史注入；随后再处理 hmvm 本身工具链路径
+    hmvm_cleanup_node_env
+    # 移除旧版本路径，避免多次切换后 PATH 堆积（不包含 shims，稍后统一 prepend）
     $cleanParts = @(hmvm_strip_hmvm_paths $env:PATH)
     $prepend    = [System.Collections.Generic.List[string]]::new()
 
     # 1. 主 bin 目录（ohpm.cmd / hvigorw.cmd / codelinter.cmd 等）
     if (Test-Path "$vpath\bin") { $prepend.Add("$vpath\bin") }
 
-    # 2. Node.js 运行时（Windows 下 node.exe 直接在 tool\node\，无 bin 子目录）
-    if (Test-Path "$vpath\tool\node") { $prepend.Add("$vpath\tool\node") }
+    # 2. Node.js 运行时：不再由 hmvm 注入，统一由 nvm/系统管理
 
     # 3. diff shim（必须在 toolchains 之前加入）：SDK toolchains/diff.exe 不符合
     #    GNU 规范，会导致 Git Bash/MSYS2 下 autoconf/cmake configure 检测失败。
@@ -348,8 +373,7 @@ function hmvm_use {
 
     $allParts    = ($prepend + $cleanParts) | Where-Object { $_ -ne '' }
     $env:PATH             = $allParts -join ';'
-    $env:DEVECO_NODE_HOME = "$vpath\tool\node"
-    $env:NODE_HOME        = "$vpath\tool\node"
+    # Node 相关环境变量不再由 hmvm 设置
     $env:DEVECO_SDK_HOME  = "$vpath\sdk"
     $env:HMVM_BIN         = "$vpath\bin"
     $env:HMVM_CURRENT     = $Version
