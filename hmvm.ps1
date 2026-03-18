@@ -6,7 +6,7 @@
 #   $env:HMVM_DIR = "$HOME\.hmvm"
 #   . "$env:HMVM_DIR\hmvm.ps1"  # This loads hmvm
 
-$script:HMVM_VERSION = "1.2.2"
+$script:HMVM_VERSION = "1.2.3"
 
 # =============================================================================
 # 路径/目录辅助函数
